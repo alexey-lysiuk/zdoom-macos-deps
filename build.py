@@ -260,7 +260,11 @@ class SladeTarget(Target):
     def configure(self, builder: 'Builder'):
         self._assign_common_linker_flags(builder)
 
+        # Remove conflicting DUMB header
         os.unlink(builder.include_path + 'dumb.h')
+
+        # Force macOS version in order to use C++17 features of standard library
+        builder.os_version = '10.15'
 
         # extra_linker_args = ' -lbz2 -lz -framework Cocoa -framework ForceFeedback -framework IOKit'
         #
@@ -278,6 +282,7 @@ class SladeTarget(Target):
         #
         opts = self.cmake_options
         # opts['CMAKE_EXE_LINKER_FLAGS'] += extra_linker_args
+        opts['CMAKE_CXX_FLAGS'] = ' -DSOL_NO_NIL=0'
         opts['SFML_STATIC'] = 'YES'
 
 
