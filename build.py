@@ -251,6 +251,36 @@ class DevilutionXTarget(Target):
         opts['CMAKE_EXE_LINKER_FLAGS'] += extra_linker_args
 
 
+class SladeTarget(Target):
+    def __init__(self):
+        super().__init__()
+        self.name = 'slade'
+        self.url = 'https://github.com/sirjuddington/SLADE.git'
+
+    def configure(self, builder: 'Builder'):
+        self._assign_common_linker_flags(builder)
+
+        os.unlink(builder.include_path + 'dumb.h')
+
+        # extra_linker_args = ' -lbz2 -lz -framework Cocoa -framework ForceFeedback -framework IOKit'
+        #
+        # extra_libs = (
+        #     'freetype',
+        #     'mikmod',
+        #     'modplug',
+        #     'opusfile',
+        #     'png',
+        #     'vorbisfile',
+        # )
+        #
+        # for lib in extra_libs:
+        #     extra_linker_args += f' {builder.lib_path}lib{lib}.a'
+        #
+        opts = self.cmake_options
+        # opts['CMAKE_EXE_LINKER_FLAGS'] += extra_linker_args
+        opts['SFML_STATIC'] = 'YES'
+
+
 class Builder(object):
     def __init__(self, args: list):
         self._create_targets()
@@ -261,6 +291,8 @@ class Builder(object):
         self.bin_path = self.prefix_path + 'bin' + os.sep
         self.include_path = self.prefix_path + 'include' + os.sep
         self.lib_path = self.prefix_path + 'lib' + os.sep
+
+        self._create_prefix_directory()
 
         arguments = self._parse_arguments(args)
 
@@ -288,7 +320,6 @@ class Builder(object):
         self.target.configure(self)
 
     def run(self):
-        self._create_prefix_directory()
         self._prepare_source()
         self._generate_cmake()
         self._build_target()
@@ -415,6 +446,7 @@ class Builder(object):
             ChocolateDoomTarget(),
             CrispyDoomTarget(),
             DevilutionXTarget(),
+            SladeTarget(),
         )
 
         self.targets = {target.name: target for target in targets}
