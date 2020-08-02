@@ -266,22 +266,19 @@ class SladeTarget(Target):
         # Force macOS version in order to use C++17 features of standard library
         builder.os_version = '10.15'
 
-        # extra_linker_args = ' -lbz2 -lz -framework Cocoa -framework ForceFeedback -framework IOKit'
-        #
-        # extra_libs = (
-        #     'freetype',
-        #     'mikmod',
-        #     'modplug',
-        #     'opusfile',
-        #     'png',
-        #     'vorbisfile',
-        # )
-        #
-        # for lib in extra_libs:
-        #     extra_linker_args += f' {builder.lib_path}lib{lib}.a'
-        #
+        extra_linker_args = ' -lbz2 -lz -framework Cocoa -framework ForceFeedback -framework IOKit'
+
+        extra_libs = (
+            'freetype',
+            'openal',
+            'vorbisfile',
+        )
+
+        for lib in extra_libs:
+            extra_linker_args += f' {builder.lib_path}lib{lib}.a'
+
         opts = self.cmake_options
-        # opts['CMAKE_EXE_LINKER_FLAGS'] += extra_linker_args
+        opts['CMAKE_EXE_LINKER_FLAGS'] += extra_linker_args
         opts['CMAKE_CXX_FLAGS'] = ' -DSOL_NO_NIL=0'
         opts['SFML_STATIC'] = 'YES'
 
