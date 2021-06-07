@@ -72,6 +72,7 @@ class ZDoomBaseTarget(CMakeMainTarget):
     def configure(self, state: BuildState):
         opts = self.options
         opts['CMAKE_EXE_LINKER_FLAGS'] = state.run_pkg_config('--libs', 'fluidsynth', 'libmpg123')
+        opts['CMAKE_MODULE_PATH'] = state.lib_path + 'cmake/ZMusic'
         opts['PK3_QUIET_ZIPDIR'] = 'YES'
         opts['DYN_OPENAL'] = 'NO'
         # Explicit OpenAL configuration to avoid selection of Apple's framework
