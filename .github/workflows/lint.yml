@@ -7,4 +7,11 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
         - uses: actions/checkout@v2
-        - uses: docker://github/super-linter:v2.1.0
+
+        - name: Super-Linter
+          uses: github/super-linter:slim-v4
+
+        - name: Bandit
+          run: |
+            pip3 install bandit
+            bandit --skip B101,B310,B404,B603,B607 --recursive .
