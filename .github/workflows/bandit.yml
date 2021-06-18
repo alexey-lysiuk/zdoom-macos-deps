@@ -1,0 +1,15 @@
+name: Bandit
+
+on: [push, pull_request]
+
+jobs:
+  bandit:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-20.04
+    steps:
+        - uses: actions/checkout@v2
+
+        - name: Run Bandit checks
+          run: |
+            pip3 install bandit
+            bandit --skip B101,B310,B404,B603,B607 --recursive .
