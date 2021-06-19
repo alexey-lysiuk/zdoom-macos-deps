@@ -44,6 +44,7 @@ def targets():
         EDuke32Target(),
         NBloodTarget(),
         QuakespasmTarget(),
+        VkQuake2Target(),
 
         # Libraries needed for GZDoom and Raze
         Bzip2Target(),

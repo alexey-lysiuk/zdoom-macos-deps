@@ -20,9 +20,11 @@ from distutils.version import StrictVersion
 import os
 from platform import machine
 import shutil
+import subprocess
 
-from .base import CMakeTarget, MakeTarget
+from .base import CMakeTarget, MakeTarget, Target
 from ..state import BuildState
+from ..utility import symlink_directory
 
 
 class MakeMainTarget(MakeTarget):
@@ -387,3 +389,91 @@ class QuakespasmTarget(MakeMainTarget):
 
     def detect(self, state: BuildState) -> bool:
         return os.path.exists(state.source + os.sep + 'Quakespasm.txt')
+
+
+# class VkQuake2Target(Target):
+class VkQuake2Target(MakeMainTarget):
+    def __init__(self, name='vkquake2'):
+        super().__init__(name)
+
+        self.destination = self.DESTINATION_OUTPUT
+        self.options['release'] = None
+        self.src_root = 'macos'
+
+    def prepare_source(self, state: BuildState):
+        state.checkout_git('https://github.com/kondrak/vkQuake2.git')
+
+    def detect(self, state: BuildState) -> bool:
+        return os.path.exists(state.source + os.sep + 'vkQuake2.png')
+
+    def configure(self, state: BuildState):
+        super().configure(state)
+
+        # Prepare directory structure like in Vulkan SDK
+        vulkan_path = state.build_path + 'vulkan_sdk' + os.sep
+        vulkan_macos_path = vulkan_path + 'macOS' + os.sep
+        vulkan_include_path = vulkan_macos_path + 'include'
+        vulkan_lib_path = vulkan_macos_path + 'lib'
+
+        os.makedirs(vulkan_macos_path, exist_ok=True)
+
+        if not os.path.exists(vulkan_include_path):
+            os.symlink(state.include_path, vulkan_include_path)
+
+        if not os.path.exists(vulkan_lib_path):
+            os.symlink(state.lib_path, vulkan_lib_path)
+
+        self.environment['VULKAN_SDK'] = vulkan_path
+
+        # os.makedirs(state.build_path, exist_ok=True)
+        # symlink_directory(state.source, state.build_path)
+
+    def build(self, state: BuildState):
+        if state.xcode:
+            args = ('open', state.build_path + 'macos/vkQuake2.xcworkspace')
+            subprocess.run(args, check=True, env=self.environment)
+        else:
+            super().build(state)
+
+        # # Prepare directory structure like in Vulkan SDK
+        # vulkan_path = state.build_path + 'vulkan_sdk' + os.sep
+        # vulkan_macos_path = vulkan_path + 'macOS' + os.sep
+        # vulkan_include_path = vulkan_macos_path + 'include'
+        # vulkan_lib_path = vulkan_macos_path + 'lib'
+        #
+        # os.makedirs(vulkan_macos_path, exist_ok=True)
+        #
+        # if not os.path.exists(vulkan_include_path):
+        #     os.symlink(state.include_path, vulkan_include_path)
+        #
+        # if not os.path.exists(vulkan_lib_path):
+        #     os.symlink(state.lib_path, vulkan_lib_path)
+
+        # # Open or build Xcode project
+        # environment = os.environ.copy()
+        # environment['VULKAN_SDK'] = vulkan_path
+
+        # if state.xcode:
+        #     args = ('open', state.build_path + 'macos/vkQuake2.xcworkspace')
+        # else:
+        #     args = ('make', 'release-xcode')
+        #
+        # subprocess.run(args, check=True, cwd=state.build_path + 'macos', env=environment)
+
+    def post_build(self, state: BuildState):
+        if state.xcode:
+            return
+
+        if os.path.exists(state.install_path):
+            shutil.rmtree(state.install_path)
+
+        shutil.copytree(state.build_path + 'macOS/vkQuake2', state.install_path)
+        shutil.copy(state.prefix_path + '/lib/libMoltenVK.dylib', state.install_path)
+
+        executable = state.install_path + 'quake2'
+        args = (
+            'install_name_tool',
+            '-add_rpath', '@loader_path"',
+            executable
+        )
+        subprocess.run(args, check=True)
