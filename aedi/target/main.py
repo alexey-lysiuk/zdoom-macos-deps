@@ -173,6 +173,8 @@ class AccTarget(CMakeMainTarget):
         state.checkout_git('https://github.com/rheit/acc.git')
 
 
+# --source=/Volumes/ramdisk/slade --jobs=1 --verbose --os-version-x64=10.10
+# --source=/Volumes/ramdisk/slade --os-version-x64=10.10 --sdk-path-x64=/Volumes/ramdisk/zdoom-macos-deps/sdk/MacOSX10.11.sdk
 class SladeTarget(CMakeMainTarget):
     def __init__(self, name='slade'):
         super().__init__(name)
