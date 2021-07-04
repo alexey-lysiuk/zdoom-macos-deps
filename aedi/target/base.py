@@ -19,6 +19,7 @@
 import copy
 from distutils.version import StrictVersion
 import os
+from pathlib import Path
 from platform import machine
 import re
 import shutil
@@ -130,7 +131,7 @@ class BuildTarget(Target):
         if state.xcode:
             return
 
-        if os.path.exists(state.install_path):
+        if state.install_path.exists():
             shutil.rmtree(state.install_path)
 
         args = [tool, 'install']
@@ -141,7 +142,7 @@ class BuildTarget(Target):
         self.update_pc_files(state)
 
     @staticmethod
-    def update_text_file(path: str, processor: typing.Callable = None):
+    def update_text_file(path: Path, processor: typing.Callable = None):
         with open(path, 'r') as f:
             content = f.readlines()
 
@@ -157,7 +158,7 @@ class BuildTarget(Target):
             f.writelines(patched_content)
 
     @staticmethod
-    def _update_variables_file(path: str, prefix_value: str, processor: typing.Callable = None, quotes: bool = True):
+    def _update_variables_file(path: Path, prefix_value: str, processor: typing.Callable = None, quotes: bool = True):
         prefix = 'prefix='
         exec_prefix = 'exec_prefix='
         includedir = 'includedir='
@@ -186,11 +187,11 @@ class BuildTarget(Target):
         BuildTarget.update_text_file(path, patch_proc)
 
     @staticmethod
-    def update_config_script(path: str, processor: typing.Callable = None):
+    def update_config_script(path: Path, processor: typing.Callable = None):
         BuildTarget._update_variables_file(path, r'$(cd "${0%/*}/.."; pwd)', processor)
 
     @staticmethod
-    def update_pc_file(path: str, processor: typing.Callable = None):
+    def update_pc_file(path: Path, processor: typing.Callable = None):
         BuildTarget._update_variables_file(path, '', processor, quotes=False)
 
     def update_pc_files(self, state: BuildState):
@@ -201,14 +202,14 @@ class BuildTarget(Target):
                     BuildTarget.update_pc_file(file_path, self._process_pkg_config)
 
     @staticmethod
-    def _process_pkg_config(pcfile: str, line: str) -> str:
+    def _process_pkg_config(pcfile: Path, line: str) -> str:
         assert pcfile
         return line
 
     def write_pc_file(self, state: BuildState,
                       filename=None, name=None, description=None, version='',
                       requires='', requires_private='', libs='', libs_private='', cflags=''):
-        pkgconfig_path = state.install_path + '/lib/pkgconfig/'
+        pkgconfig_path = state.install_path / 'lib/pkgconfig'
         os.makedirs(pkgconfig_path, exist_ok=True)
 
         if not filename:
@@ -234,19 +235,19 @@ Libs: -L${{libdir}} {libs}
 Libs.private: {libs_private}
 Cflags: -I${{includedir}} {cflags}
 '''
-        with open(pkgconfig_path + filename, 'w') as f:
+        with open(pkgconfig_path / filename, 'w') as f:
             f.write(pc_content)
 
     @staticmethod
     def make_platform_header(state: BuildState, header: str):
-        include_path = state.install_path + os.sep + 'include' + os.sep
+        include_path = state.install_path / 'include'
         header_parts = header.rsplit(os.sep, 1)
 
         if len(header_parts) == 1:
             header_parts.insert(0, '')
 
-        common_header = include_path + header
-        platform_header = f'{include_path}{header_parts[0]}/_aedi_{state.architecture()}_{header_parts[1]}'
+        common_header = include_path / header
+        platform_header = include_path / header_parts[0] / f'_aedi_{state.architecture()}_{header_parts[1]}'
         shutil.move(common_header, platform_header)
 
         with open(common_header, 'w') as f:
@@ -263,7 +264,7 @@ Cflags: -I${{includedir}} {cflags}
 ''')
 
     def copy_to_bin(self, state: BuildState, filename: str = None, new_filename: str = None):
-        bin_path = state.install_path + '/bin/'
+        bin_path = state.install_path / 'bin'
         os.makedirs(bin_path, exist_ok=True)
 
         if not filename:
@@ -271,8 +272,8 @@ Cflags: -I${{includedir}} {cflags}
         if not new_filename:
             new_filename = filename
 
-        src_path = state.build_path + filename
-        dst_path = bin_path + new_filename
+        src_path = state.build_path / filename
+        dst_path = bin_path / new_filename
         shutil.copy(src_path, dst_path)
 
 
@@ -292,12 +293,12 @@ class MakeTarget(BuildTarget):
         args = [
             self.tool,
             '-j', state.jobs,
-            'CC=' + state.c_compiler(),
-            'CXX=' + state.cxx_compiler(),
+            f'CC={state.c_compiler()}',
+            f'CXX={state.cxx_compiler()}',
         ]
         args += self.options.to_list()
 
-        work_path = state.build_path + self.src_root
+        work_path = state.build_path / self.src_root
         subprocess.check_call(args, cwd=work_path, env=self.environment)
 
 
@@ -310,12 +311,12 @@ class ConfigureMakeTarget(BuildTarget):
         super().configure(state)
         self.make.configure(state)
 
-        work_path = state.build_path + self.src_root
-        configure_path = work_path + os.sep + 'configure'
+        work_path = state.build_path / self.src_root
+        configure_path = work_path / 'configure'
 
         common_args = [
             configure_path,
-            '--prefix=' + state.install_path,
+            f'--prefix={state.install_path}',
         ]
         common_args += self.options.to_list()
 
@@ -350,8 +351,7 @@ class CMakeTarget(BuildTarget):
         super().__init__(name)
 
     def detect(self, state: BuildState) -> bool:
-        src_root = self.src_root and os.sep + self.src_root or ''
-        cmakelists_path = state.source + src_root + os.sep + 'CMakeLists.txt'
+        cmakelists_path = state.source / self.src_root / 'CMakeLists.txt'
 
         if not os.path.exists(cmakelists_path):
             return False
@@ -480,7 +480,7 @@ class CMakeStaticDependencyTarget(CMakeTarget):
         module = 'targets-release.cmake'
 
         for probe_module in (module, self.name + module):
-            module_path = f'{state.install_path}/lib/cmake/{self.name}/{probe_module}'
+            module_path = state.install_path / 'lib' / 'cmake' / self.name / probe_module
 
             if os.path.exists(module_path):
                 self.update_text_file(module_path, _keep_target)

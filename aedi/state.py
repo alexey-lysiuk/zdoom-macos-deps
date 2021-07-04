@@ -165,7 +165,7 @@ class BuildState:
 
         return first_path_component, extract_path
 
-    def _apply_source_patch(self, extract_path: str, patch: str):
+    def _apply_source_patch(self, extract_path: Path, patch: str):
         patch_path = self.patch_path / (patch + '.diff')
         assert patch_path.exists()
 
