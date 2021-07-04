@@ -19,6 +19,7 @@
 from distutils.version import StrictVersion
 import hashlib
 import os
+from pathlib import Path
 import shutil
 import subprocess
 import urllib.request
@@ -26,17 +27,17 @@ import urllib.request
 
 class BuildState:
     def __init__(self):
-        self_path = os.path.dirname(os.path.abspath(__file__))
-        self.root_path = os.path.abspath(self_path + os.sep + os.pardir) + os.sep
-        self.deps_path = self.root_path + 'deps' + os.sep
-        self.prefix_path = self.root_path + 'prefix' + os.sep
-        self.bin_path = self.prefix_path + 'bin' + os.sep
-        self.include_path = self.prefix_path + 'include' + os.sep
-        self.lib_path = self.prefix_path + 'lib' + os.sep
-        self.patch_path = self.root_path + 'patch' + os.sep
-        self.source_path = self.root_path + 'source' + os.sep
+        self_path = Path(__file__)
+        self.root_path = self_path.parent.parent
+        self.deps_path = self.root_path / 'deps'
+        self.prefix_path = self.root_path / 'prefix'
+        self.bin_path = self.prefix_path / 'bin'
+        self.include_path = self.prefix_path / 'include'
+        self.lib_path = self.prefix_path / 'lib'
+        self.patch_path = self.root_path / 'patch'
+        self.source_path = self.root_path / 'source'
 
-        self.source = None
+        self.source = Path()
         self.external_source = True
 
         self.build_path = None
@@ -102,13 +103,13 @@ class BuildState:
 
         # Adjust source and build paths according to extracted source code
         self.source = extract_path
-        self.build_path = self.build_path + first_path_component + os.sep
+        self.build_path = self.build_path / first_path_component
 
-    def _read_source_package(self, url: str) -> (bytes, str):
+    def _read_source_package(self, url: str) -> (bytes, Path):
         filename = url.rsplit(os.sep, 1)[1]
-        filepath = self.source + filename
+        filepath = self.source / filename
 
-        if os.path.exists(filepath):
+        if filepath.exists():
             # Read existing source package
             with open(filepath, 'rb') as f:
                 data = f.read()
@@ -130,16 +131,16 @@ class BuildState:
         return data, filepath
 
     @staticmethod
-    def _verify_checksum(checksum: str, data: bytes, filepath: str) -> None:
+    def _verify_checksum(checksum: str, data: bytes, filepath: Path) -> None:
         file_hasher = hashlib.sha256()
         file_hasher.update(data)
         file_checksum = file_hasher.hexdigest()
 
         if file_checksum != checksum:
-            os.unlink(filepath)
+            filepath.unlink()
             raise Exception(f'Checksum of {filepath} does not match, expected: {checksum}, actual: {file_checksum}')
 
-    def _unpack_source_package(self, filepath: str) -> (str, str):
+    def _unpack_source_package(self, filepath: Path) -> (str, Path):
         filepaths = subprocess.check_output(['tar', '-tf', filepath]).decode("utf-8")
         filepaths = filepaths.split('\n')
         first_path_component = None
@@ -150,11 +151,11 @@ class BuildState:
                 break
 
         if not first_path_component:
-            raise Exception("Failed to figure out source code path for " + filepath)
+            raise Exception(f'Failed to figure out source code path for {filepath}')
 
-        extract_path = self.source + first_path_component + os.sep
+        extract_path = self.source / first_path_component
 
-        if not os.path.exists(extract_path):
+        if not extract_path.exists():
             # Extract source code package
             try:
                 subprocess.check_call(['tar', '-xf', filepath], cwd=self.source)
@@ -165,13 +166,12 @@ class BuildState:
         return first_path_component, extract_path
 
     def _apply_source_patch(self, extract_path: str, patch: str):
-        patch_path = self.patch_path + patch + '.diff'
-
-        assert os.path.exists(patch_path)
+        patch_path = self.patch_path / (patch + '.diff')
+        assert patch_path.exists()
 
         # Check if patch is already applied
         test_arg = '--dry-run'
-        args = ['patch', test_arg, '--strip=1', '--input=' + patch_path]
+        args = ['patch', test_arg, '--strip=1', '--input=' + str(patch_path)]
 
         if subprocess.call(args, cwd=extract_path) == 0:
             # Patch wasn't applied yet, do it now
@@ -181,7 +181,7 @@ class BuildState:
     def run_pkg_config(self, *args) -> str:
         os.makedirs(self.build_path, exist_ok=True)
 
-        args = (self.bin_path + 'pkg-config',) + args
+        args = (self.bin_path / 'pkg-config',) + args
         result = subprocess.check_output(args, cwd=self.build_path)
 
         return result.decode('utf-8').rstrip('\n')

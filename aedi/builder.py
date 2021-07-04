@@ -19,6 +19,7 @@
 import argparse
 import copy
 import os
+from pathlib import Path
 from platform import machine
 import shutil
 import subprocess
@@ -45,33 +46,29 @@ class Builder(object):
         state.platform = self._platforms[0]
 
         if arguments.source_path:
-            state.source_path = os.path.abspath(arguments.source_path)
+            state.source_path = Path(arguments.source_path).absolute()
 
         if arguments.target:
             self._target = self._targets[arguments.target]
-            state.source = state.source_path + self._target.name + os.sep
+            state.source = state.source_path / self._target.name
             state.external_source = False
         else:
             assert arguments.source
-            state.source = os.path.abspath(arguments.source) + os.sep
+            state.source = Path(arguments.source).absolute()
             state.external_source = True
             self._detect_target()
 
         del self._targets
 
         if arguments.build_path:
-            state.build_path = os.path.abspath(arguments.build_path)
+            state.build_path = Path(arguments.build_path).absolute()
         else:
-            state.build_path = state.root_path + 'build' + os.sep + self._target.name + \
-                               os.sep + ('xcode' if state.xcode else 'make')
+            state.build_path = state.root_path / 'build' / self._target.name / ('xcode' if state.xcode else 'make')
 
         if arguments.output_path:
-            state.output_path = os.path.abspath(arguments.output_path)
+            state.output_path = Path(arguments.output_path).absolute()
         else:
-            state.output_path = state.root_path + 'output'
-
-        state.build_path += os.sep
-        state.output_path += os.sep
+            state.output_path = state.root_path / 'output'
 
         state.jobs = arguments.jobs and arguments.jobs or \
             subprocess.check_output(['sysctl', '-n', 'hw.ncpu']).decode('ascii').strip()
@@ -117,13 +114,13 @@ class Builder(object):
         target.prepare_source(state)
 
         if target.destination == Target.DESTINATION_DEPS:
-            state.install_path = state.deps_path + target.name + os.sep
+            state.install_path = state.deps_path / target.name
         elif target.destination == Target.DESTINATION_OUTPUT:
-            state.install_path = state.output_path + target.name + os.sep
+            state.install_path = state.output_path / target.name
 
         assert state.install_path
 
-        if not state.xcode and os.path.exists(state.install_path):
+        if not state.xcode and state.install_path.exists():
             shutil.rmtree(state.install_path)
 
         if target.name != DOWNLOAD_CMAKE_TARGET_NAME:
