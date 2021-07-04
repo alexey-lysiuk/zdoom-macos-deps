@@ -76,12 +76,12 @@ class Builder(object):
     def _populate_platforms(self, arguments):
         state = self._state
 
-        def adjust_sdk_path(path: str) -> str:
+        def adjust_sdk_path(path: Path) -> Path:
             if path:
-                return os.path.abspath(path)
+                return path.absolute()
 
-            sdk_probe_path = f'{state.root_path}sdk{os.sep}MacOSX{os_version}.sdk'
-            return sdk_probe_path if os.path.exists(sdk_probe_path) else None
+            sdk_probe_path = state.root_path / 'sdk' / f'MacOSX{os_version}.sdk'
+            return sdk_probe_path if sdk_probe_path.exists() else None
 
         if not arguments.disable_x64:
             os_version = arguments.os_version_x64 if arguments.os_version_x64 else OS_VERSION_X86_64
@@ -153,13 +153,13 @@ class Builder(object):
                 continue
 
             state.platform = platform
-            state.build_path = base_build_path + 'build_' + platform.architecture + os.sep
+            state.build_path = base_build_path / ('build_' + platform.architecture)
 
             if platform.architecture == machine():
                 state.native_build_path = state.build_path
 
             target = copy.deepcopy(base_target)
-            state.install_path = base_build_path + 'install_' + platform.architecture + os.sep
+            state.install_path = base_build_path / ('install_' + platform.architecture)
 
             self._build(target)
 
@@ -168,14 +168,14 @@ class Builder(object):
         Builder._merge_install_paths(install_paths, base_install_path)
 
     @staticmethod
-    def _compare_files(paths: typing.Sequence[str]) -> bool:
+    def _compare_files(paths: typing.Sequence[Path]) -> bool:
         content = None
 
         for path in paths:
-            if not os.path.exists(path):
+            if not path.exists():
                 return False
 
-            with open(path, 'rb') as f:
+            with path.open('rb') as f:
                 if content:
                     if content != f.read():
                         return False
@@ -185,8 +185,8 @@ class Builder(object):
         return True
 
     @staticmethod
-    def _merge_file(src: os.DirEntry, src_sub_paths: typing.Sequence[str], dst_path: str):
-        with open(src.path, 'rb') as f:
+    def _merge_file(src: Path, src_sub_paths: typing.Sequence[Path], dst_path: Path):
+        with open(src, 'rb') as f:
             header = f.read(8)
 
         is_executable = header[:4] == b'\xcf\xfa\xed\xfe'
@@ -194,7 +194,7 @@ class Builder(object):
 
         if is_executable or is_library:
             # Merge executable and library files
-            dst_file = dst_path + os.sep + src.name
+            dst_file = dst_path / src.name
 
             args = ['lipo']
             args += src_sub_paths
@@ -202,16 +202,16 @@ class Builder(object):
             subprocess.check_call(args)
 
             # Apply ad-hoc code signing on executable files outside of application bundles
-            if is_executable and '.app/Contents/' not in src.path:
+            if is_executable and '.app/Contents/' not in str(src):
                 args = ('codesign', '--sign', '-', dst_file)
                 subprocess.check_call(args)
         else:
             if not Builder._compare_files(src_sub_paths):
-                print(f'WARNING: Source files for {dst_path + os.sep + src.name} don\'t match')
+                print(f'WARNING: Source files for {dst_path / src.name} don\'t match')
             shutil.copy(src_sub_paths[0], dst_path)
 
     @staticmethod
-    def _merge_missing_files(src_paths: typing.Sequence[str], dst_path: str):
+    def _merge_missing_files(src_paths: typing.Sequence[Path], dst_path: Path):
         shifted_src_paths = [path for path in src_paths]
         last_path_index = len(src_paths) - 1
 
@@ -219,33 +219,33 @@ class Builder(object):
             shifted_src_paths.append(shifted_src_paths[0])
             del shifted_src_paths[0]
 
-            if not os.path.exists(shifted_src_paths[0]):
+            if not shifted_src_paths[0].exists():
                 continue
 
             Builder._merge_install_paths(shifted_src_paths, dst_path, missing_files_only=True)
 
     @staticmethod
-    def _merge_install_paths(src_paths: typing.Sequence[str], dst_path: str, missing_files_only=False):
+    def _merge_install_paths(src_paths: typing.Sequence[Path], dst_path: Path, missing_files_only=False):
         if len(src_paths) == 0:
             return
 
         if not missing_files_only:
-            if os.path.exists(dst_path):
+            if dst_path.exists():
                 shutil.rmtree(dst_path)
 
         os.makedirs(dst_path, exist_ok=True)
 
-        for src in os.scandir(src_paths[0]):
-            src_sub_paths = [path + os.sep + src.name for path in src_paths]
+        for src in src_paths[0].iterdir():
+            src_sub_paths = [path / src.name for path in src_paths]
 
             if src.is_dir():
-                Builder._merge_install_paths(src_sub_paths, dst_path + os.sep + src.name, missing_files_only)
+                Builder._merge_install_paths(src_sub_paths, dst_path / src.name, missing_files_only)
             elif src.name.endswith('.la'):
                 # Skip libtool files
                 continue
             elif missing_files_only:
                 for src_sub_path in src_sub_paths[1:]:
-                    if not os.path.exists(src_sub_path):
+                    if not src_sub_path.exists():
                         shutil.copy(src_sub_paths[0], dst_path)
             else:
                 Builder._merge_file(src, src_sub_paths, dst_path)
@@ -259,9 +259,9 @@ class Builder(object):
 
         cleanup = True
 
-        for dep in os.scandir(state.deps_path):
+        for dep in state.deps_path.iterdir():
             if dep.is_dir():
-                symlink_directory(dep.path, state.prefix_path, cleanup)
+                symlink_directory(dep, state.prefix_path, cleanup)
 
                 # Do symlink cleanup only once
                 cleanup = False

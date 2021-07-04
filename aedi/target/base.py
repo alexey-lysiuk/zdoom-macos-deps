@@ -80,7 +80,7 @@ class BuildTarget(Target):
 
         sdk_path = state.sdk_path()
         if sdk_path:
-            match = re.search(r'/MacOSX(\d+.\d+).sdk', sdk_path, re.IGNORECASE)
+            match = re.search(r'/MacOSX(\d+.\d+).sdk', str(sdk_path), re.IGNORECASE)
             if match and StrictVersion(match[1]) < self.sdk_version[state.architecture()]:
                 raise RuntimeError('Minimum SDK version requirement is not met')
 
@@ -119,7 +119,7 @@ class BuildTarget(Target):
     def _set_sdk(self, state: BuildState, varname: str):
         sdk_path = state.sdk_path()
         if sdk_path:
-            self._update_env(varname, '-isysroot ' + sdk_path)
+            self._update_env(varname, f'-isysroot {sdk_path}')
 
     def _set_os_version(self, state: BuildState, varname: str):
         os_version = state.os_version()
@@ -389,16 +389,16 @@ class CMakeTarget(BuildTarget):
         args = [
             'cmake',
             '-DCMAKE_BUILD_TYPE=Release',
-            '-DCMAKE_INSTALL_PREFIX=' + state.install_path,
-            '-DCMAKE_PREFIX_PATH=' + state.prefix_path,
+            f'-DCMAKE_INSTALL_PREFIX={state.install_path}',
+            f'-DCMAKE_PREFIX_PATH={state.prefix_path}',
         ]
 
         if state.xcode:
             args.append('-GXcode')
         else:
             args.append('-GUnix Makefiles')
-            args.append('-DCMAKE_C_COMPILER=' + state.c_compiler())
-            args.append('-DCMAKE_CXX_COMPILER=' + state.cxx_compiler())
+            args.append(f'-DCMAKE_C_COMPILER={state.c_compiler()}')
+            args.append(f'-DCMAKE_CXX_COMPILER={state.cxx_compiler()}')
 
             architecture = state.architecture()
             if architecture != machine():
@@ -411,10 +411,10 @@ class CMakeTarget(BuildTarget):
 
         sdk_path = state.sdk_path()
         if sdk_path:
-            args.append('-DCMAKE_OSX_SYSROOT=' + sdk_path)
+            args.append(f'-DCMAKE_OSX_SYSROOT={sdk_path}')
 
         args += self.options.to_list(CommandLineOptions.CMAKE_RULES)
-        args.append(state.source + self.src_root)
+        args.append(state.source / self.src_root)
 
         subprocess.check_call(args, cwd=state.build_path, env=self.environment)
 

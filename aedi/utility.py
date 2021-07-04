@@ -16,9 +16,10 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import collections
+import collections.abc
 from distutils.version import StrictVersion
 import os
+from pathlib import Path
 import shutil
 
 
@@ -51,22 +52,19 @@ class CommandLineOptions(dict):
 
 class TargetPlatform:
     def __init__(self, architecture: str, host: str, os_version: [str, StrictVersion],
-                 sdk_path: str, prefix_path: str):
+                 sdk_path: Path, prefix_path: Path):
         self.architecture = architecture
         self.host = host
         self.os_version = os_version if isinstance(os_version, StrictVersion) else StrictVersion(os_version)
         self.sdk_path = sdk_path
-        self.c_compiler = f'{prefix_path}bin/{host}-gcc'
-        self.cxx_compiler = f'{prefix_path}bin/{host}-g++'
+        self.c_compiler = prefix_path / 'bin' / f'{host}-gcc'
+        self.cxx_compiler = prefix_path / 'bin' / f'{host}-g++'
 
 
-def symlink_directory(src_path: str, dst_path: str, cleanup=True):
-    src_abspath = os.path.abspath(src_path)
-    dst_abspath = os.path.abspath(dst_path)
-
+def symlink_directory(src_path: Path, dst_path: Path, cleanup=True):
     if cleanup:
         # Delete obsolete symbolic links
-        for root, _, files in os.walk(dst_abspath, followlinks=True):
+        for root, _, files in os.walk(dst_path, followlinks=True):
             for filename in files:
                 file_path = root + os.sep + filename
 
@@ -74,16 +72,16 @@ def symlink_directory(src_path: str, dst_path: str, cleanup=True):
                     os.remove(file_path)
 
     # Create symbolic links if needed
-    for entry in os.scandir(src_abspath):
-        dst_subpath = entry.path.replace(src_abspath, dst_abspath)
+    for entry in src_path.iterdir():
+        dst_subpath = dst_path / entry.name
         if entry.is_dir():
             os.makedirs(dst_subpath, exist_ok=True)
-            symlink_directory(entry.path, dst_subpath, cleanup=False)
-        elif not os.path.exists(dst_subpath):
-            if os.path.islink(entry.path):
-                shutil.copy(entry.path, dst_subpath, follow_symlinks=False)
+            symlink_directory(entry, dst_subpath, cleanup=False)
+        elif not dst_subpath.exists():
+            if entry.is_symlink():
+                shutil.copy(entry, dst_subpath, follow_symlinks=False)
             else:
-                os.symlink(entry.path, dst_subpath)
+                os.symlink(entry, dst_subpath)
 
 
 # Case insensitive dictionary class from
